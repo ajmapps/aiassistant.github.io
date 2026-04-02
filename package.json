@@ -1,8 +1,8 @@
 {
   "name": "ai-assistant",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/main.js",
   "dependencies": {
-    "node-fetch": "2.6.7"
+    "node-fetch": "^2.6.7"
   }
 }
