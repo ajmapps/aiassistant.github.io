@@ -1,37 +1,43 @@
 module.exports = async function (req, res) {
-    // 1. Logs mein check karein ke kya aaya
-    console.log("Raw Payload:", req.payload);
-
     try {
-        // Payload ko parse karein
-        const body = JSON.parse(req.payload);
-        
-        // Agar body mein prompt direct hai ya data ke andar hai, handle karein
-        const userPrompt = body.prompt || (body.data ? JSON.parse(body.data).prompt : null);
-        
-        console.log("Parsed Prompt:", userPrompt);
-
-        if (!userPrompt) {
-            return res.json({ error: "No prompt found", received: req.payload });
+        // 1. Parse JSON safely
+        let body;
+        try {
+            body = JSON.parse(req.payload);
+        } catch (e) {
+            return res.json({ error: "Invalid JSON format" });
         }
 
-        // DeepSeek logic... (baqi code waisa hi rahega)
+        const userPrompt = body.prompt || "Hello";
         const apiKey = process.env.DEEPSEEK_API_KEY;
-        const fetch = require('node-fetch'); // Make sure node-fetch is in package.json
-        
+
+        // 2. Fetch call with Error Handling
         const response = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
             body: JSON.stringify({
                 model: "deepseek-chat",
                 messages: [{ role: "user", content: userPrompt }]
             })
         });
 
+        // 3. Check if response is okay
+        if (!response.ok) {
+            const errorText = await response.text();
+            return res.json({ error: `API Error: ${response.status} - ${errorText}` });
+        }
+
+        // 4. Safe JSON parsing
         const data = await response.json();
+        
+        // 5. Final Success
         return res.json({ response: data.choices[0].message.content });
 
     } catch (error) {
-        return res.json({ error: "Function Error: " + error.message });
+        // Agar code crash kare, to yahan se error milega
+        return res.json({ error: "System Error: " + error.message });
     }
 };
