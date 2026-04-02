@@ -1,17 +1,28 @@
 module.exports = async function (req, res) {
     try {
-        console.log("Start Execution");
-
-        // 1. Parse Request
+        console.log("--- START EXECUTION ---");
+        
+        // 1. Payload check
+        if (!req.payload) {
+            return res.json({ error: "Payload is empty" });
+        }
         const body = JSON.parse(req.payload);
         const userPrompt = body.prompt || "Hello";
+        
+        // 2. API Key check
+        const apiKey = process.env.DEEPSEEK_API_KEY;
+        if (!apiKey) {
+            return res.json({ error: "DEEPSEEK_API_KEY is missing in Appwrite Settings" });
+        }
 
-        // 2. Native Fetch Call (No require needed)
+        console.log("Fetching DeepSeek API...");
+
+        // 3. Fetch call
         const response = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 model: "deepseek-chat",
@@ -19,27 +30,29 @@ module.exports = async function (req, res) {
             })
         });
 
-        // 3. Response Check
+        // 4. Checking if response exists before calling .json()
         if (!response) {
-            return res.json({ error: "Fetch returned undefined response" });
+            return res.json({ error: "Response is undefined (Network failure)" });
         }
 
-        console.log("Status Code:", response.status);
-
-        // 4. Safe Parse
-        if (response.ok) {
-            const data = await response.json();
-            if (data.choices && data.choices[0]) {
-                return res.json({ response: data.choices[0].message.content });
-            } else {
-                return res.json({ error: "API returned empty choices", raw: data });
-            }
-        } else {
+        // 5. Check if response is successful
+        if (!response.ok) {
             const errorText = await response.text();
-            return res.json({ error: `API Request Failed: ${response.status}`, details: errorText });
+            console.error("API Error:", errorText);
+            return res.json({ error: `API Failed with status ${response.status}: ${errorText}` });
         }
 
-    } catch (error) {
-        return res.json({ error: "System Error: " + error.message, stack: error.stack });
+        // 6. Finally parse JSON
+        const data = await response.json();
+        
+        if (data.choices && data.choices[0]) {
+            return res.json({ response: data.choices[0].message.content });
+        } else {
+            return res.json({ error: "API returned malformed data", raw: JSON.stringify(data) });
+        }
+
+    } catch (e) {
+        console.error("SYSTEM CRASH:", e.message);
+        return res.json({ error: "System Error: " + e.message });
     }
 };
