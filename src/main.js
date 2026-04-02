@@ -1,51 +1,39 @@
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 module.exports = async function (req, res) {
     try {
-        console.log("Start Execution");
+        console.log("Execution Started");
+        
+        // 1. Payload Parse
+        const body = JSON.parse(req.payload);
+        const userPrompt = body.prompt || "Hello";
 
-        // 1. Safe Payload Parsing
-        let userPrompt = "Hello";
-        try {
-            const body = JSON.parse(req.payload);
-            userPrompt = body.prompt || "Hello";
-        } catch (e) {
-            console.log("Payload parsing error, using default");
-        }
-
-        // 2. API Call
-        console.log("Calling DeepSeek API...");
-        const response = await fetch('https://api.deepseek.com/chat/completions', {
-            method: 'POST',
+        // 2. Axios API Call
+        const response = await axios.post('https://api.deepseek.com/chat/completions', {
+            model: "deepseek-chat",
+            messages: [{ role: "user", content: userPrompt }]
+        }, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: [{ role: "user", content: userPrompt }]
-            })
+            }
         });
 
-        // 3. Very Safe Response Handling
-        if (!response) {
-            console.log("Critical Error: response object is undefined");
-            return res.json({ error: "Fetch returned no response object" });
-        }
-
-        console.log("Response Status:", response.status);
-
-        if (response.ok) {
-            const data = await response.json();
-            return res.json({ response: data.choices[0].message.content });
+        // 3. Axios automatically JSON handle karta hai
+        if (response.data && response.data.choices && response.data.choices[0]) {
+            return res.json({ response: response.data.choices[0].message.content });
         } else {
-            const errorText = await response.text();
-            console.log("API Error details:", errorText);
-            return res.json({ error: "API Request Failed: " + response.status });
+            return res.json({ error: "Invalid response structure from DeepSeek" });
         }
 
     } catch (error) {
-        console.log("Caught Error:", error.message);
-        return res.json({ error: "System Error: " + error.message });
+        // Axios error handling
+        if (error.response) {
+            console.error("API Error Response:", error.response.data);
+            return res.json({ error: "API Error: " + JSON.stringify(error.response.data) });
+        } else {
+            console.error("System Error:", error.message);
+            return res.json({ error: "System Error: " + error.message });
+        }
     }
 };
