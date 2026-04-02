@@ -1,22 +1,17 @@
 module.exports = async function (req, res) {
     try {
-        // 1. Parse JSON safely
-        let body;
-        try {
-            body = JSON.parse(req.payload);
-        } catch (e) {
-            return res.json({ error: "Invalid JSON format" });
-        }
+        console.log("Start Execution");
 
+        // 1. Parse Request
+        const body = JSON.parse(req.payload);
         const userPrompt = body.prompt || "Hello";
-        const apiKey = process.env.DEEPSEEK_API_KEY;
 
-        // 2. Fetch call with Error Handling
+        // 2. Native Fetch Call (No require needed)
         const response = await fetch('https://api.deepseek.com/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
             },
             body: JSON.stringify({
                 model: "deepseek-chat",
@@ -24,20 +19,27 @@ module.exports = async function (req, res) {
             })
         });
 
-        // 3. Check if response is okay
-        if (!response.ok) {
-            const errorText = await response.text();
-            return res.json({ error: `API Error: ${response.status} - ${errorText}` });
+        // 3. Response Check
+        if (!response) {
+            return res.json({ error: "Fetch returned undefined response" });
         }
 
-        // 4. Safe JSON parsing
-        const data = await response.json();
-        
-        // 5. Final Success
-        return res.json({ response: data.choices[0].message.content });
+        console.log("Status Code:", response.status);
+
+        // 4. Safe Parse
+        if (response.ok) {
+            const data = await response.json();
+            if (data.choices && data.choices[0]) {
+                return res.json({ response: data.choices[0].message.content });
+            } else {
+                return res.json({ error: "API returned empty choices", raw: data });
+            }
+        } else {
+            const errorText = await response.text();
+            return res.json({ error: `API Request Failed: ${response.status}`, details: errorText });
+        }
 
     } catch (error) {
-        // Agar code crash kare, to yahan se error milega
-        return res.json({ error: "System Error: " + error.message });
+        return res.json({ error: "System Error: " + error.message, stack: error.stack });
     }
 };
